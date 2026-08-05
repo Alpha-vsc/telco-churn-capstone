@@ -62,4 +62,50 @@ universel — justifie l'intérêt de la PR-AUC / lift chart comme diagnostics d
   différemment selon le score) — justifie SHAP comme exigence, pas comme bonus (Mission 4).
 
 ---
-*(Sections des Missions 1 à 5 à compléter au fur et à mesure du projet.)*
+
+## Mission 1 — Données et analyse exploratoire
+
+*Notebook complet : `notebooks/01_eda.ipynb` (exécuté, sorties visibles).*
+
+### Profiling
+7 043 lignes, 21 colonnes. 0 doublon (lignes complètes et `customerID`). Aucune feature
+quasi-constante (seuil 98%).
+
+**Le piège `TotalCharges`** : typée `object`, elle contient 11 valeurs vides correspondant
+**exactement** aux 11 clients avec `tenure == 0` (nouveaux clients non encore facturés).
+Ce n'est pas un manquant aléatoire mais un zéro logique — décision retenue pour la
+Mission 2 : imputation par 0 (connaissance métier), pas par la médiane.
+
+**Colinéarité** : `TotalCharges` est quasi-déterministe (r = 0,9996) à partir de
+`tenure × MonthlyCharges`. Piste Mission 2 : remplacer par un ratio
+`TotalCharges / (tenure+1)` plutôt que de garder les 3 variables brutes corrélées.
+
+### Détection de fuite de données
+Méthodologie : AUC univarié par feature, seuil suspect fixé à 0,90. Résultat : le
+maximum observé est 0,74 (`Contract`, `tenure`) — **aucune fuite détectée**. Toutes les
+colonnes sont des attributs de compte connus pendant que le client est actif ; aucune ne
+décrit un événement postérieur à la résiliation.
+
+### Analyse bivariée — top 5 features (information mutuelle)
+`Contract` > `tenure` > `OnlineSecurity` > `TechSupport` > `InternetService`.
+`gender`, `PhoneService`, `MultipleLines` : pouvoir discriminant quasi nul
+(MI ≈ 0, AUC ≈ 0,50) — candidats à l'élimination en M2, à confirmer par CV.
+
+### Hypothèses formulées et vérifiées (5/5 confirmées)
+
+| Hypothèse | Résultat | Statut |
+|---|---|---|
+| Contrat mensuel → plus de churn | 42,7% vs 11,3% vs 2,8% (mensuel/1an/2ans) | ✅ |
+| Faible ancienneté → plus de churn | médiane 10 mois (churn) vs 38 mois (fidèles) | ✅ |
+| Pas d'OnlineSecurity → plus de churn | 41,8% vs 14,6% | ✅ |
+| Fibre optique → plus de churn | 41,9% vs 19,0% (DSL) vs 7,4% (aucun) | ✅ |
+| Chèque électronique → plus de churn | 45,3% vs 15–19% (autres modes) | ✅ (effet le plus fort) |
+
+### 3 insights majeurs
+1. `Contract` est le signal dominant (MI la plus élevée, AUC univarié 0,74).
+2. `TotalCharges` est redondante et son "manquant" est un zéro logique, pas un NA statistique.
+3. Aucune fuite de données — la vigilance en M2 portera sur l'ordre des opérations
+   (split avant transformation), pas sur une colonne à retirer.
+
+---
+*(Sections des Missions 2 à 5 à compléter au fur et à mesure du projet.)*
