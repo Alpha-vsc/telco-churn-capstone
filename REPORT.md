@@ -156,4 +156,55 @@ susceptibles d'exploiter des seuils/interactions différemment.
 **F2 de référence pour la Mission 3 : 0,5621 (± 0,0364).**
 
 ---
-*(Sections des Missions 3 à 5 à compléter au fur et à mesure du projet.)*
+
+## Mission 3 — Modélisation et comparaison rigoureuse
+
+*Notebook complet : `notebooks/03_modeling_comparison.ipynb`.*
+
+### Baseline naïve
+`DummyClassifier` (classe majoritaire) : **F2 = 0,0000** (rappel nul, accuracy ~73,5%
+mais valeur métier nulle). Barre minimale triviale à battre — confirme que l'accuracy
+seule serait un piège d'évaluation ici.
+
+### Trois modèles, trois familles (mêmes 5 folds stratifiés)
+
+| Modèle | Justification | F2 (CV 5-fold) | Écart-type |
+|---|---|---|---|
+| Régression logistique (linéaire) | Référence interprétable, peu de risque d'overfitting | **0,5621** | 0,0364 |
+| Forêt aléatoire (arbres) | Capture nativement interactions/seuils non linéaires | 0,5084 | 0,0210 |
+| SVM RBF (marge maximale) | 3ᵉ famille distincte, tractable à cette taille de dataset (~5600 lignes) | 0,5265 | **0,0140** |
+
+**Modèle le plus stable : SVM** (écart-type le plus faible), mais **meilleure moyenne :
+régression logistique** — compromis performance/stabilité explicite, pas de vainqueur trivial.
+
+**Pourquoi la régression logistique gagne** : vérifié via PR-AUC (indépendante du seuil)
+— elle est aussi la meilleure (0,658 vs 0,608 RF vs 0,633 SVM), donc ce n'est pas un
+artefact du seuil à 0,5 mais un vrai avantage de pouvoir de classement. Interprétation :
+le signal dominant (`Contract`, `tenure`, `OnlineSecurity`) est largement monotone et
+peu bruité (cf. Mission 1) — terrain favorable au modèle linéaire. RF (profondeur non
+limitée) et SVM (hyperparamètres par défaut) pourraient progresser après tuning (M4).
+
+### Test statistique (Wilcoxon apparié)
+À 5 plis : p = 0,0625 pour LogReg vs les deux autres modèles — **non significatif à 5%**,
+mais c'est une limite de puissance du test (5 paires → p minimal atteignable = 0,0625,
+même en cas de victoire sur tous les plis). À **10 plis** : LogReg bat SVM sur 9/10 plis,
+**p = 0,0039** vs SVM et **p = 0,0098** vs Forêt aléatoire — significatif dans les deux cas.
+**Modèle retenu : régression logistique.**
+
+### Retest du feature engineering (promesse M2) avec Forêt aléatoire
+Gains marginaux (+0,0016 `tenure_group`, +0,0017 `charges_per_tenure`), très inférieurs
+à l'écart-type inter-plis (~0,02) — **non significatifs même avec un modèle non
+linéaire**. Confirme la décision de la Mission 2 : le signal est déjà capté par les
+variables brutes, indépendamment du modèle.
+
+### Analyse d'erreurs
+Profil des faux négatifs (churners manqués, n=682/5634) : ancienneté médiane **25 mois**,
+contre **6 mois** pour les churners correctement détectés. Le modèle excelle sur le
+pattern « nouveau client + contrat mensuel » mais **rate systématiquement les clients
+fidèles de longue date qui finissent par partir** — profil différent, mal capturé par
+des variables statiques (instantané, pas de série temporelle). Limite du dataset, pas
+du modèle : des features de tendance (évolution récente de charges, interactions
+support) seraient nécessaires pour ce segment — hors du périmètre disponible ici.
+
+---
+*(Sections des Missions 4 et 5 à compléter au fur et à mesure du projet.)*
