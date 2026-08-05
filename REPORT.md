@@ -108,4 +108,52 @@ décrit un événement postérieur à la résiliation.
    (split avant transformation), pas sur une colonne à retirer.
 
 ---
-*(Sections des Missions 2 à 5 à compléter au fur et à mesure du projet.)*
+
+## Mission 2 — Préparation et pipeline sans fuite de données
+
+*Notebook complet : `notebooks/02_pipeline_baseline.ipynb`. Pipeline réutilisable :
+`src/pipeline.py` + `src/features.py`.*
+
+### Split d'abord
+`train_test_split` stratifié (80/20, `random_state=42`) réalisé sur les données encore
+brutes. Taux de churn identique à 4 décimales entre train (0,2654) et test (0,2654).
+Si les statistiques d'imputation/encodage étaient apprises avant ce split, le test
+"verrait" indirectement des informations du train — le score de test ne mesurerait
+plus une vraie généralisation.
+
+### Pipeline
+`ColumnTransformer` : sous-pipeline numérique (imputation médiane + `StandardScaler`)
+et catégoriel (imputation mode + `OneHotEncoder`), assemblés dans un `Pipeline`
+scikit-learn unique. Les statistiques (médiane, mode, modalités) ne sont apprises qu'au
+`.fit(X_train)`, jamais sur le test — garantie structurelle, pas seulement disciplinaire.
+
+Le correctif `TotalCharges=0` (Mission 1) est appliqué via un transformer dédié
+(`TotalChargesFixer`) **avant** le `ColumnTransformer` : il n'apprend aucune statistique
+du train (règle fixe), donc aucun risque de fuite même s'il précède le split.
+
+### Baseline
+**F2 = 0,5621 (± 0,0364) en CV 5-fold stratifiée** sur le train — régression logistique.
+Comparaison imputation médiane vs métier : écart marginal (+0,0002, attendu vu que
+seules 11/5634 lignes du train sont concernées) — la décision reste justifiée sur le
+plan conceptuel, pas seulement statistique.
+
+### Feature engineering — résultat honnête : aucun gain retenu
+
+| Feature testée | F2 CV | Gain vs baseline |
+|---|---|---|
+| Baseline (aucune FE) | 0,5621 | — |
+| + tenure_group | 0,5579 | −0,0042 |
+| + n_services | 0,5617 | −0,0005 |
+| + charges_per_tenure (remplace TotalCharges) | 0,5506 | −0,0116 |
+| Toutes combinées | 0,5469 | −0,0153 |
+
+Les trois features candidates **dégradent** légèrement le score sur ce modèle linéaire :
+le `OneHotEncoder` + `StandardScaler` capture déjà l'essentiel de l'information qu'elles
+tentaient de resynthétiser. **Rasoir d'Occam appliqué** : aucune n'est retenue dans le
+pipeline final. Décision réévaluée en Mission 3 avec des modèles non linéaires (arbres),
+susceptibles d'exploiter des seuils/interactions différemment.
+
+**F2 de référence pour la Mission 3 : 0,5621 (± 0,0364).**
+
+---
+*(Sections des Missions 3 à 5 à compléter au fur et à mesure du projet.)*
