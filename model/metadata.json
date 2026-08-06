@@ -1,0 +1,52 @@
+{
+  "model_version": "1.0.0",
+  "trained_on": "100% du dataset Telco-Customer-Churn.csv (7043 clients)",
+  "expected_features": [
+    "gender",
+    "SeniorCitizen",
+    "Partner",
+    "Dependents",
+    "tenure",
+    "PhoneService",
+    "MultipleLines",
+    "InternetService",
+    "OnlineSecurity",
+    "OnlineBackup",
+    "DeviceProtection",
+    "TechSupport",
+    "StreamingTV",
+    "StreamingMovies",
+    "Contract",
+    "PaperlessBilling",
+    "PaymentMethod",
+    "MonthlyCharges",
+    "TotalCharges"
+  ],
+  "decision_threshold": 0.18,
+  "cost_model_eur": {
+    "false_negative": 175,
+    "false_positive": 47
+  },
+  "reference_metrics_cv_train": {
+    "f2_cv_mean": 0.7221,
+    "f2_cv_std": 0.029,
+    "precision_at_threshold": 0.457,
+    "recall_at_threshold": 0.892,
+    "brier_score_calibrated": 0.1353
+  },
+  "test_set_metrics": {
+    "f2_test": 0.7475,
+    "precision_test": 0.4526,
+    "recall_test": 0.893,
+    "pr_auc_test": 0.633,
+    "brier_test": 0.1382,
+    "cost_per_1000_clients_eur": 18444.3,
+    "confusion_matrix": {
+      "tn": 631,
+      "fp": 404,
+      "fn": 40,
+      "tp": 334
+    },
+    "n_test_samples": 1409
+  }
+}

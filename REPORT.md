@@ -95,11 +95,11 @@ décrit un événement postérieur à la résiliation.
 
 | Hypothèse | Résultat | Statut |
 |---|---|---|
-| Contrat mensuel → plus de churn | 42,7% vs 11,3% vs 2,8% (mensuel/1an/2ans) | ✅ |
-| Faible ancienneté → plus de churn | médiane 10 mois (churn) vs 38 mois (fidèles) | ✅ |
-| Pas d'OnlineSecurity → plus de churn | 41,8% vs 14,6% | ✅ |
-| Fibre optique → plus de churn | 41,9% vs 19,0% (DSL) vs 7,4% (aucun) | ✅ |
-| Chèque électronique → plus de churn | 45,3% vs 15–19% (autres modes) | ✅ (effet le plus fort) |
+| Contrat mensuel → plus de churn | 42,7% vs 11,3% vs 2,8% (mensuel/1an/2ans) | Confirmée |
+| Faible ancienneté → plus de churn | médiane 10 mois (churn) vs 38 mois (fidèles) | Confirmée |
+| Pas d'OnlineSecurity → plus de churn | 41,8% vs 14,6% | Confirmée |
+| Fibre optique → plus de churn | 41,9% vs 19,0% (DSL) vs 7,4% (aucun) | Confirmée |
+| Chèque électronique → plus de churn | 45,3% vs 15–19% (autres modes) | Confirmée (effet le plus fort) |
 
 ### 3 insights majeurs
 1. `Contract` est le signal dominant (MI la plus élevée, AUC univarié 0,74).
@@ -289,4 +289,124 @@ top-K compatible avec le budget réel — le seuil 0,18 sert de référence thé
 de règle rigide de production.
 
 ---
-*(Section de la Mission 5 à compléter.)*
+
+## Mission 5 — Déploiement, tests et monitoring
+
+*Code : `src/model.py`, `src/train.py`, `tests/test_pipeline.py`, `api/main.py`.*
+
+### Évaluation finale sur le test — premier et unique contact
+Le test (20%, tenu à l'écart depuis la Mission 2) est utilisé pour la première fois ici.
+**F2 = 0,7475** (vs 0,7221 en CV train) — aucun signe de sur-apprentissage, le test
+confirme même légèrement mieux que la CV. Une fois cette évaluation actée, le modèle de
+production est réentraîné sur **100% des données disponibles** (pratique standard :
+maximiser la performance déployée sans invalider l'évaluation déjà obtenue sur données
+non vues).
+
+### Sérialisation
+`joblib.dump` du pipeline complet (preprocessing + calibration + modèle). Vérifié :
+prédictions strictement identiques après rechargement (`np.array_equal`).
+
+### Tests (pytest) — 8 tests, tous passants
+Sortie de bonne forme, probabilités dans [0,1], gestion des valeurs manquantes,
+schéma de features attendu (`EXPECTED_FEATURES`), erreur explicite si feature
+manquante, performance sur jeu de référence ≥ seuil d'alerte (0,60), cohérence après
+rechargement, et un test de sanity métier (profil archétypal à risque > profil fidèle,
+avec bornes absolues 0,5/0,2).
+
+### API REST (FastAPI) — testée en conditions réelles (curl)
+`GET /health`, `POST /predict` (validation Pydantic stricte — un `Contract` invalide
+renvoie **422** avec message explicite, pas un plantage), `GET /model-info`. Exemples
+curl complets dans `README.md`.
+
+### Documentation
+`README.md` (installation, reproduction, usage API) + `MODEL_CARD.md` (structure
+Mitchell et al., FAccT 2019). **Qu'est-ce qu'une model card et pourquoi un standard ?**
+Une model card documente, de façon structurée et systématique, le contexte d'usage
+prévu, les données d'entraînement, les métriques **par sous-groupe** (pas seulement
+globales) et les limites connues d'un modèle — elle rend explicite ce qu'un rapport de
+performance global masque. Elle est devenue un standard car elle force à documenter les
+angles morts *avant* le déploiement plutôt que de les découvrir en production, et donne
+aux équipes non techniques (juridique, produit) un document actionnable.
+
+**Découverte concrète en construisant la model card** : le taux de ciblage diffère
+nettement entre seniors (80,2%) et non-seniors (47,9%) — écart réel, cohérent avec un
+taux de churn presque doublé chez les seniors, mais qui mérite une revue conformité
+avant un déploiement à grande échelle (détail complet dans `MODEL_CARD.md`).
+
+### Plan de monitoring
+- **Data drift** (distribution des features en entrée) : surveiller la distribution de
+  `Contract`, `InternetService`, `MonthlyCharges` — un changement de mix d'offres
+  commerciales fausserait silencieusement les prédictions. Outil : **Evidently**
+  (rapports de drift automatisés, tests statistiques par colonne).
+- **Concept drift** (relation features → cible qui change) : le modèle a été entraîné
+  sur un marché à un instant T (cf. Mission 0 — non-stationarité déjà identifiée comme
+  risque). Suivre la performance réelle sur les clients dont l'issue devient connue
+  (churné ou non 1 mois après scoring) par comparaison à la performance de référence.
+- **Performance drift** : suivre F2/recall/precision glissants sur les clients scorés
+  puis observés, alerte si dégradation > 10% relatif vs la référence de la Mission 4.
+- **Fréquence** : rapport Evidently hebdomadaire (aligné sur le cycle des campagnes
+  marketing identifié en Mission 0), ré-entraînement complet si drift confirmé sur
+  2 semaines consécutives.
+
+---
+
+## Réponses aux questions de réflexion
+
+**1. Concept drift.** Un modèle bon à l'entraînement se dégrade en production quand la
+relation entre features et cible change alors que le modèle reste figé — par exemple si
+un concurrent lance une offre agressive qui change ce qui pousse un client à partir.
+C'est différent du data drift (la distribution des features change, pas leur lien avec
+la cible). À surveiller : performance réelle glissante sur clients dont l'issue est
+connue (pas seulement la distribution des features en entrée, qui peut rester stable
+alors que la relation sous-jacente a changé).
+
+**2. Information mutuelle vs corrélation de Pearson.** Pearson ne mesure que les
+relations **linéaires** et n'est définie que pour des variables numériques.
+L'information mutuelle capture **toute** forme de dépendance statistique (linéaire ou
+non, monotone ou non) et s'applique nativement aux variables catégorielles — c'est ce
+qui a permis, en Mission 1, de classer `Contract` (catégorielle) comme la feature la
+plus prédictive, un résultat qu'un simple tableau de corrélations de Pearson n'aurait
+même pas pu produire.
+
+**3. No Free Lunch.** Aucun algorithme n'est universellement meilleur car la
+performance d'un modèle dépend de la structure du problème (linéarité du signal, taille
+du dataset, bruit) — un modèle adapté à une structure donnée sera sous-optimal sur une
+autre. **Preuve empirique obtenue dans ce projet** : à hyperparamètres par défaut
+(Mission 3), la régression logistique bat nettement la forêt aléatoire et le SVM, parce
+que le signal du churn Telco est largement monotone. Après tuning (Mission 4), l'écart
+disparaît complètement (Wilcoxon p=0,625) — ni le modèle linéaire ni les modèles non
+linéaires n'ont de supériorité intrinsèque ; leur position relative dépend entièrement
+du réglage et du problème. C'est exactement pourquoi un benchmark comparatif honnête
+(mêmes folds, test statistique) est indispensable plutôt que de choisir un modèle par
+réputation.
+
+**4. Fairness.** Deux métriques : la **demographic parity** (le taux de ciblage —
+prédictions positives — doit être comparable entre sous-groupes, indépendamment du
+taux de churn réel) et l'**equalized odds** (le rappel et le taux de faux positifs
+doivent être comparables entre sous-groupes, cette fois en tenant compte du taux réel).
+Mesuré dans ce projet (`MODEL_CARD.md`) : quasi-parité de genre (52,8% vs 53,3% de
+ciblage), mais écart net par âge (SeniorCitizen : 80,2% vs 47,9%) — expliqué par un
+taux de churn réel presque double chez les seniors (equalized odds plutôt respecté),
+mais qui viole la demographic parity stricte. Les deux métriques peuvent être en
+tension : les satisfaire simultanément n'est généralement pas possible si les taux de
+base diffèrent entre groupes — un arbitrage explicite, documenté, est nécessaire plutôt
+qu'un optimum supposé automatique.
+
+**5. Fuite de données — où elle aurait pu s'introduire, et comment elle a été évitée.**
+- *Imputation/encodage calculés avant le split* → évité par un `Pipeline`
+  scikit-learn unique, `fit()` uniquement sur le train (Mission 2).
+- *`TotalCharges` imputé par une statistique globale (médiane calculée sur tout le
+  dataset)* → remplacé par une règle métier fixe (0 si `tenure==0`), qui n'apprend
+  rien du train et peut donc être appliquée sans risque même avant le split (Mission 1-2).
+- *Feature engineering apprenant une statistique (ex. un target encoding)* → aucune
+  des features créées n'en utilisait ; toutes étaient déterministes (comptage, ratio,
+  bucketing à seuils fixes), donc sans risque même si calculées hors pipeline —
+  choix documenté explicitement en Mission 2.
+- *Sélection de modèle/hyperparamètres sur le test* → jamais : tout le tuning
+  (Mission 4) et la comparaison de modèles (Mission 3) se sont faits en validation
+  croisée sur le train ; le test n'a été touché qu'une seule fois, en Mission 5, pour
+  l'évaluation finale.
+- *Vérification active, pas seulement procédurale* : Mission 1 a quantifié l'absence de
+  fuite via un AUC univarié par feature (seuil 0,90), pas juste une relecture visuelle
+  des colonnes.
+
