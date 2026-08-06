@@ -207,4 +207,86 @@ du modèle : des features de tendance (évolution récente de charges, interacti
 support) seraient nécessaires pour ce segment — hors du périmètre disponible ici.
 
 ---
-*(Sections des Missions 4 et 5 à compléter au fur et à mesure du projet.)*
+
+## Mission 4 — Optimisation, calibration et interprétabilité
+
+*Notebook complet : `notebooks/04_tuning_calibration_shap.ipynb`.*
+
+### Tuning Optuna — 2 modèles retunés, ≥6 hyperparamètres, pruner médian
+Conformément à la promesse de la Mission 3, **les deux finalistes ont été retunés**
+(pas seulement le vainqueur) : régression logistique (7 hyperparamètres : `C`,
+`penalty`, `l1_ratio`, `class_weight`, `tol`, `max_iter`, `fit_intercept`, solveur
+`saga` fixé) et forêt aléatoire (7 hyperparamètres : `n_estimators`, `max_depth`,
+`min_samples_split`, `min_samples_leaf`, `max_features`, `class_weight`, `criterion`).
+Recherche interne 3-fold avec `MedianPruner` (39/50 essais complétés pour LogReg,
+30/70 pour RF — le pruner a effectivement écarté des combinaisons non prometteuses).
+
+| Modèle | F2 défaut (M3) | F2 tuné | Gain |
+|---|---|---|---|
+| Régression logistique | 0,5621 | 0,7221 | **+0,1599** |
+| Forêt aléatoire | 0,5084 | 0,7233 | **+0,2149** |
+
+**Importance des hyperparamètres (fANOVA)** : `class_weight` domine dans les deux cas
+(76% LogReg, 53% RF) — le gain n'est pas un raffinement fin de régularisation, mais la
+correction du déséquilibre de classes que les valeurs par défaut ignoraient.
+
+**Résultat clé : après tuning, l'écart entre les deux modèles disparaît** (Wilcoxon
+LogReg vs RF tuné : p = 0,625, non significatif) — le tuning a neutralisé l'avantage
+structurel de la régression logistique observé en Mission 3 à hyperparamètres par
+défaut. **Modèle retenu : régression logistique tunée** — à performance statistiquement
+équivalente, le modèle le plus simple et interprétable est préféré (rasoir d'Occam),
+cohérent avec l'exigence d'explicabilité posée dès la Mission 0.
+
+### Calibration
+`class_weight='balanced'` déforme les probabilités prédites (le modèle agit comme si
+les classes étaient équilibrées). Vérifié par reliability diagram : le modèle non
+calibré est **surconfiant** dans les probabilités hautes (ex. prédit 0,88 pour une
+fréquence réelle observée de 0,76). **Brier score : 0,1653 → 0,1353 après calibration
+Platt (sigmoid)**, soit -18,1%. Platt préféré à l'isotonique (plus robuste à cette
+taille de dataset, ~5 600 échantillons). Le modèle final déployé utilisera les
+probabilités calibrées.
+
+### Interprétabilité SHAP
+Calculé sur le modèle tuné non calibré (`LinearExplainer`) — la calibration Platt étant
+une transformation monotone, elle ne change ni le classement ni l'attribution des
+features, seulement l'échelle affichée.
+
+**Top features (importance globale)** : `tenure` domine largement, suivi de
+`MonthlyCharges`, `InternetService_Fiber optic`, `TotalCharges`, `Contract_Month-to-month`.
+Cohérent avec les Missions 1 et 3. `InternetService_Fiber optic` a un effet positif net
+sur le risque indépendamment de `MonthlyCharges` — pas seulement un effet prix.
+
+**3 décisions individuelles** : le cas le plus instructif est le Faux Positif — un
+profil **quasiment identique** au Vrai Positif (nouveau client, contrat mensuel, fibre
+chère, proba 0,92) mais qui est resté fidèle. Rappel important : le churn reste
+probabiliste, pas déterministe — le modèle n'a pas "mal raisonné", il a identifié un
+profil à risque objectivement élevé qui, cette fois, ne s'est pas concrétisé. Ce n'est
+pas un bug corrigible par plus de features, mais une limite structurelle de la prédiction.
+
+**Dependence plot `tenure`** : relation monotone décroissante, pente plus marquée pour
+les faibles anciennetés — le risque varie le plus vite chez les nouveaux clients. La
+coloration par `MonthlyCharges` révèle une interaction : à ancienneté égale, payer plus
+cher accentue légèrement l'impact SHAP — cohérent avec l'hypothèse « nouveau client +
+facture élevée = risque maximal » de la Mission 1.
+
+### Seuil de décision
+Optimisé sur le coût métier de la Mission 0 (FN=175€, FP=47€), balayé sur les
+probabilités calibrées, en CV sur le train (test toujours non touché).
+
+| Seuil | Precision | Recall | % base ciblée | Coût / 1000 clients |
+|---|---|---|---|---|
+| 0,50 (défaut) | 0,653 | 0,537 | 21,8% | 25 057 € |
+| **0,18 (optimal)** | 0,457 | **0,892** | 51,8% | **18 240 €** |
+
+Le seuil optimal fait passer le rappel de 54% à 89% au prix d'une précision plus faible
+— cohérent avec le ratio de coût FN/FP ≈ 3,7 établi en Mission 0.
+
+**Tension avec la contrainte opérationnelle (déjà anticipée en M0)** : à ce seuil, 52%
+de la base est ciblée. Si le budget de campagne ne permet pas de contacter la moitié
+des clients, le seuil de coût pur n'est pas directement actionnable. Recommandation
+opérationnelle : utiliser le score calibré pour **classer** les clients et contacter le
+top-K compatible avec le budget réel — le seuil 0,18 sert de référence théorique, pas
+de règle rigide de production.
+
+---
+*(Section de la Mission 5 à compléter.)*
