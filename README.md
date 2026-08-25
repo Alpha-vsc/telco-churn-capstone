@@ -1,5 +1,9 @@
 # Prédiction du Churn Telco — Projet Final Supervised Learning
 
+![Tests](https://github.com/Alpha-vsc/telco-churn-capstone/actions/workflows/tests.yml/badge.svg)
+![Python](https://img.shields.io/badge/python-3.12-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+
 Prédit la probabilité de résiliation d'un client télécom pour prioriser les offres
 de rétention.
 
@@ -29,7 +33,10 @@ src/                  code source réutilisable (pipeline, features, modèle, en
 tests/                suite de tests pytest
 api/                  API FastAPI (health, predict, model-info)
 model/                modèle sérialisé (.joblib) + métadonnées (généré par src/train.py)
-docs/                 rapports PDF + captures d'écran (preuves d'exécution)
+docs/                 rapports PDF + captures d'écran + rapport de monitoring (Evidently)
+.github/workflows/    CI GitHub Actions (tests automatiques à chaque push)
+Dockerfile            image Docker pour l'API (build + run sans installation locale)
+LICENSE               licence MIT
 REPORT.md             rapport complet du projet (les 6 missions)
 REPORT_INTERMEDIAIRE.md  version pédagogique du rapport
 MODEL_CARD.md         model card du modèle déployé
@@ -81,6 +88,29 @@ curl -X POST http://localhost:8000/predict \
 ```
 
 Documentation interactive (Swagger) : `http://localhost:8000/docs`.
+
+## Lancer l'API avec Docker
+
+Alternative sans installation locale de Python :
+
+```bash
+docker build -t telco-churn-api .
+docker run -p 8000:8000 telco-churn-api
+```
+
+L'image entraîne le modèle au moment du build (`src/train.py`), donc `docker run` suffit
+ensuite — aucune dépendance à installer sur la machine hôte.
+
+## Monitoring — exemple de rapport de drift
+
+`src/monitoring.py` génère un rapport [Evidently](https://www.evidentlyai.com/) réel
+comparant la distribution du train (référence) à celle du test (proxy d'un nouveau
+batch de production) — voir `REPORT.md` (Mission 5) pour la méthodologie complète.
+
+```bash
+python src/monitoring.py
+# -> ouvre docs/monitoring_report.html dans un navigateur
+```
 
 ## Preuves d'exécution
 

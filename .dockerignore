@@ -1,0 +1,14 @@
+.git/
+.github/
+notebooks/
+docs/
+tests/
+model/*.joblib
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+REPORT.md
+REPORT_INTERMEDIAIRE.md
+MODEL_CARD.md
