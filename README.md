@@ -1,8 +1,11 @@
 # Prédiction du Churn Telco — Projet Final Supervised Learning
 
 Prédit la probabilité de résiliation d'un client télécom pour prioriser les offres
-de rétention. Voir `REPORT.md` pour le raisonnement complet (6 missions) et
-`MODEL_CARD.md` pour les caractéristiques du modèle déployé.
+de rétention.
+
+- Rapport technique complet (les 6 missions) : `REPORT.md` / `docs/rapport_final.pdf`
+- Version pédagogique (niveau intermédiaire) : `REPORT_INTERMEDIAIRE.md` / `docs/rapport_intermediaire.pdf`
+- Model card : `MODEL_CARD.md`
 
 ## Problème
 
@@ -19,21 +22,28 @@ F2-score sur test : 0,75. Détails complets : `REPORT.md` (Missions 2 à 4).
 ## Structure du dépôt
 
 ```
-data/           dataset brut
-notebooks/      01_eda, 02_pipeline_baseline, 03_modeling_comparison, 04_tuning_calibration_shap
-src/            code source réutilisable (pipeline, features, modèle, entraînement)
-tests/          suite de tests pytest
-api/            API FastAPI (health, predict, model-info)
-model/          modèle sérialisé (.joblib) + métadonnées (généré par src/train.py)
-REPORT.md       rapport complet du projet (les 6 missions)
-MODEL_CARD.md   model card du modèle déployé
+data/                dataset brut
+notebooks/            01_eda, 02_pipeline_baseline, 03_modeling_comparison,
+                       04_tuning_calibration_shap (exécutés, sorties visibles)
+src/                  code source réutilisable (pipeline, features, modèle, entraînement)
+tests/                suite de tests pytest
+api/                  API FastAPI (health, predict, model-info)
+model/                modèle sérialisé (.joblib) + métadonnées (généré par src/train.py)
+docs/                 rapports PDF + captures d'écran (preuves d'exécution)
+REPORT.md             rapport complet du projet (les 6 missions)
+REPORT_INTERMEDIAIRE.md  version pédagogique du rapport
+MODEL_CARD.md         model card du modèle déployé
 ```
 
 ## Installation
 
 ```bash
+git clone https://github.com/Alpha-vsc/telco-churn-capstone.git
+cd telco-churn-capstone
 pip install -r requirements.txt
 ```
+
+Testé avec Python 3.12.
 
 ## Reproduire le projet
 
@@ -72,6 +82,23 @@ curl -X POST http://localhost:8000/predict \
 
 Documentation interactive (Swagger) : `http://localhost:8000/docs`.
 
+## Preuves d'exécution
+
+Le projet a été testé de bout en bout en local (Windows, VS Code) avant rendu.
+
+**Suite de tests pytest — 8/8 passants :**
+
+![Résultats pytest](docs/screenshots/pytest_results.png)
+
+**API — documentation interactive générée automatiquement (Swagger) :**
+
+![Swagger /docs](docs/screenshots/api_swagger_docs.png)
+
+**API — réponse réelle de `POST /predict`** (profil à haut risque : nouveau client,
+contrat mensuel, fibre optique) :
+
+![Réponse /predict](docs/screenshots/api_predict_response.png)
+
 ## Performances de référence
 
 | Métrique | CV train (5-fold) | Test (tenu à l'écart jusqu'à M5) |
@@ -85,3 +112,7 @@ Documentation interactive (Swagger) : `http://localhost:8000/docs`.
 
 `random_state=42` fixé partout. `requirements.txt` épinglé aux versions effectivement
 utilisées. Notebooks entièrement ré-exécutés de bout en bout (sorties visibles).
+
+## Auteur
+
+Alpha Oumar Diallo — Master IA, Supervised Learning — Enseignant : Ibrahima SY
